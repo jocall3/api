@@ -1,0 +1,2095 @@
+openapi: 3.0.1
+info:
+  title: NexusMind AI - Intelli-Content Ledger Platform API
+  version: v1
+  contact:
+    name: NexusMind AI Engineering
+    url: https://nexusmind.ai/contact
+  description: >-
+    The API for NexusMind AI, providing AI-driven semantic content analysis and
+    immutable knowledge provenance via a novel ledger system.
+paths:
+  /api/file_contents:
+    get:
+      summary: List File Contents
+      tags:
+        - FileContent
+      operationId: listFileContents
+      description: Retrieve a paginated list of uploaded digital assets.
+      parameters:
+        - name: after_cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+          description: Cursor for the next page of results.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of results per page.
+        - name: name_contains
+          in: query
+          schema:
+            type: string
+          description: >-
+            Filter by file name containing the specified string
+            (case-insensitive).
+        - name: file_type
+          in: query
+          schema:
+            type: string
+          description: Filter by MIME type (e.g., application/pdf, text/plain).
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - uploaded
+              - ingestion_failed
+              - analysis_pending
+              - analysis_complete
+          description: Filter by file content processing status.
+        - name: external_id
+          in: query
+          schema:
+            type: string
+          description: Filter by a custom external ID for the file content.
+        - name: metadata
+          in: query
+          schema:
+            type: object
+            additionalProperties:
+              type: string
+          style: deepObject
+          explode: true
+          description: Query files by user-defined metadata key-value pairs.
+      responses:
+        '200':
+          description: Successful retrieval of file contents.
+          headers:
+            X-After-Cursor:
+              schema:
+                type: string
+                nullable: true
+              description: The cursor for the next page.
+            X-Per-Page:
+              schema:
+                type: integer
+                nullable: true
+              description: The current `per_page` setting.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FileContent'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+    post:
+      summary: Upload File Content and Initiate Analysis
+      tags:
+        - FileContent
+      operationId: uploadFileContent
+      description: >-
+        Upload a digital file to the platform and optionally trigger its initial
+        analysis. Supports both direct file upload (multipart/form-data) or
+        providing a URL to an existing file.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+          required: false
+          description: Unique key to ensure idempotent request processing.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/FileContentCreateRequestMultipart'
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FileContentCreateRequestUrl'
+      responses:
+        '202':
+          description: >-
+            File upload and analysis initiation accepted. Processing is
+            asynchronous.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '413':
+          description: Payload too large, or file size exceeds limits.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorMessage'
+  /api/file_contents/{id}:
+    get:
+      summary: Get File Content Details
+      tags:
+        - FileContent
+      operationId: getFileContent
+      description: Retrieve detailed information about a specific file content.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the file content.
+      responses:
+        '200':
+          description: Successful retrieval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileContent'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+    delete:
+      summary: Delete File Content
+      tags:
+        - FileContent
+      operationId: deleteFileContent
+      description: >-
+        Permanently remove a file content and all associated ledger entries.
+        This action may be irreversible.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the file content to delete.
+      responses:
+        '204':
+          description: File content successfully deleted.
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/analysis_profiles:
+    get:
+      summary: List Analysis Profiles
+      tags:
+        - AnalysisProfile
+      operationId: listAnalysisProfiles
+      description: Retrieve a list of pre-defined AI analysis configurations.
+      responses:
+        '200':
+          description: Successful retrieval of analysis profiles.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalysisProfile'
+    post:
+      summary: Create Analysis Profile
+      tags:
+        - AnalysisProfile
+      operationId: createAnalysisProfile
+      description: Define a new reusable AI analysis configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisProfileCreateRequest'
+      responses:
+        '201':
+          description: Analysis profile created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProfile'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+  /api/analysis_profiles/{id}:
+    get:
+      summary: Get Analysis Profile Details
+      tags:
+        - AnalysisProfile
+      operationId: getAnalysisProfile
+      description: Retrieve details for a specific analysis profile.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the analysis profile.
+      responses:
+        '200':
+          description: Successful retrieval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisProfile'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/analysis_jobs:
+    get:
+      summary: List Analysis Jobs
+      tags:
+        - AnalysisJob
+      operationId: listAnalysisJobs
+      description: Retrieve a paginated list of ongoing and completed analysis tasks.
+      parameters:
+        - name: after_cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+          description: Cursor for the next page.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of results per page.
+        - name: file_content_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter jobs by the associated file content ID.
+        - name: analysis_profile_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter jobs by the analysis profile used.
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - queued
+              - processing
+              - completed
+              - failed
+              - cancelled
+          description: Filter jobs by their current status.
+      responses:
+        '200':
+          description: Successful retrieval of analysis jobs.
+          headers:
+            X-After-Cursor:
+              schema:
+                type: string
+                nullable: true
+            X-Per-Page:
+              schema:
+                type: integer
+                nullable: true
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AnalysisJob'
+    post:
+      summary: Trigger Ad-Hoc Analysis Job
+      tags:
+        - AnalysisJob
+      operationId: triggerAnalysisJob
+      description: >-
+        Manually trigger an analysis for an already uploaded file content using
+        a specific profile.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+          required: false
+          description: Unique key for idempotent requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnalysisJobCreateRequest'
+      responses:
+        '202':
+          description: Analysis job successfully queued. Processing is asynchronous.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/analysis_jobs/{id}:
+    get:
+      summary: Get Analysis Job Details
+      tags:
+        - AnalysisJob
+      operationId: getAnalysisJob
+      description: Retrieve details for a specific analysis job, including its output.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the analysis job.
+      responses:
+        '200':
+          description: Successful retrieval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalysisJob'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/semantic_ledger_accounts:
+    get:
+      summary: List Semantic Ledger Accounts
+      tags:
+        - SemanticLedger
+      operationId: listSemanticLedgerAccounts
+      description: >-
+        Retrieve a paginated list of all semantic ledger accounts (content
+        accounts and concept accounts).
+      parameters:
+        - name: after_cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+          description: Cursor for the next page.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of results per page.
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum:
+              - file_content_account
+              - semantic_concept_account
+          description: Filter accounts by type.
+        - name: related_file_content_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            For 'file_content_account' type, filter by the associated file
+            content ID.
+        - name: external_id
+          in: query
+          schema:
+            type: string
+          description: External ID for concept accounts (e.g., 'CONCEPT::AI_Ethics').
+        - name: name_contains
+          in: query
+          schema:
+            type: string
+          description: Filter accounts by name (case-insensitive partial match).
+      responses:
+        '200':
+          description: Successful retrieval of semantic ledger accounts.
+          headers:
+            X-After-Cursor:
+              schema:
+                type: string
+                nullable: true
+            X-Per_Page:
+              schema:
+                type: integer
+                nullable: true
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SemanticLedgerAccount'
+    post:
+      summary: Create Semantic Ledger Account (Concept Account)
+      tags:
+        - SemanticLedger
+      operationId: createSemanticConceptAccount
+      description: >-
+        Create a new Ledger Account representing a semantic concept (e.g., for
+        taxonomies or entities). File Content accounts are auto-created upon
+        file upload.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+          required: false
+          description: Unique key for idempotent requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SemanticLedgerAccountCreateRequest'
+      responses:
+        '201':
+          description: Semantic Ledger Account (Concept) created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SemanticLedgerAccount'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+  /api/semantic_ledger_accounts/{id}:
+    get:
+      summary: Get Semantic Ledger Account Details
+      tags:
+        - SemanticLedger
+      operationId: getSemanticLedgerAccount
+      description: >-
+        Retrieve details for a specific semantic ledger account (content or
+        concept).
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the semantic ledger account.
+      responses:
+        '200':
+          description: Successful retrieval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SemanticLedgerAccount'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+    patch:
+      summary: Update Semantic Ledger Account
+      tags:
+        - SemanticLedger
+      operationId: updateSemanticLedgerAccount
+      description: Update metadata or description for a semantic ledger account.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SemanticLedgerAccountUpdateRequest'
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the semantic ledger account.
+      responses:
+        '200':
+          description: Successful update.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SemanticLedgerAccount'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/semantic_ledger_entries:
+    get:
+      summary: List Semantic Ledger Entries
+      tags:
+        - SemanticLedger
+      operationId: listSemanticLedgerEntries
+      description: >-
+        Retrieve a paginated list of granular semantic facts recorded in the
+        ledger.
+      parameters:
+        - name: after_cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+          description: Cursor for the next page.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of results per page.
+        - name: ledger_account_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            Filter entries by the ID of the related Content Account or Concept
+            Account.
+        - name: semantic_transaction_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: >-
+            Filter entries by the specific Insight Transaction (analysis run)
+            that created them.
+        - name: semantic_data_type
+          in: query
+          schema:
+            type: string
+            enum:
+              - keyword
+              - topic
+              - entity
+              - sentiment_score
+              - summary_extract
+              - vector_embedding_hash
+              - taxonomy_node
+              - text_excerpt
+              - object_detection
+              - face_detection
+              - language
+              - color_palette
+              - audio_transcription
+              - document_structure
+          description: Filter entries by the type of semantic insight.
+        - name: semantic_value_contains
+          in: query
+          schema:
+            type: string
+          description: >-
+            Filter entries by specific values found in the semantic data
+            (case-insensitive partial match).
+        - name: file_content_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter entries originating from a specific FileContent.
+        - name: created_at_gt
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter entries created after (greater than) a specific datetime.
+        - name: created_at_lt
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: Filter entries created before (less than) a specific datetime.
+      responses:
+        '200':
+          description: Successful retrieval of semantic ledger entries.
+          headers:
+            X-After-Cursor:
+              schema:
+                type: string
+                nullable: true
+            X-Per_Page:
+              schema:
+                type: integer
+                nullable: true
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SemanticLedgerEntry'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+  /api/semantic_ledger_entries/{id}:
+    get:
+      summary: Get Semantic Ledger Entry Details
+      tags:
+        - SemanticLedger
+      operationId: getSemanticLedgerEntry
+      description: Retrieve details for a specific semantic ledger entry.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the semantic ledger entry.
+      responses:
+        '200':
+          description: Successful retrieval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SemanticLedgerEntry'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/semantic_ledger_transactions:
+    get:
+      summary: List Insight Transactions (Analysis Run Records)
+      tags:
+        - SemanticLedger
+      operationId: listInsightTransactions
+      description: >-
+        Retrieve a paginated list of all AI analysis run transactions recorded
+        in the ledger. Each transaction represents a completed analysis job and
+        a snapshot of derived insights.
+      parameters:
+        - name: after_cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+          description: Cursor for the next page.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of results per page.
+        - name: file_content_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter transactions by the analyzed file content.
+        - name: analysis_profile_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter transactions by the analysis profile used.
+        - name: external_id
+          in: query
+          schema:
+            type: string
+          description: >-
+            Filter by the external ID of the transaction (e.g., related Analysis
+            Job ID).
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum:
+              - posted
+          description: >-
+            Filter by the status of the transaction. For semantic ledger,
+            typically 'posted'.
+        - name: effective_at_gt
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: >-
+            Filter transactions with an analysis timestamp after (greater than)
+            a specific datetime.
+        - name: effective_at_lt
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: >-
+            Filter transactions with an analysis timestamp before (less than) a
+            specific datetime.
+      responses:
+        '200':
+          description: Successful retrieval of analysis run transactions.
+          headers:
+            X-After-Cursor:
+              schema:
+                type: string
+                nullable: true
+            X-Per_Page:
+              schema:
+                type: integer
+                nullable: true
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SemanticLedgerTransaction'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+  /api/semantic_ledger_transactions/{id}:
+    get:
+      summary: Get Insight Transaction Details
+      tags:
+        - SemanticLedger
+      operationId: getInsightTransaction
+      description: Retrieve details for a specific AI analysis run transaction.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the insight transaction.
+      responses:
+        '200':
+          description: Successful retrieval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SemanticLedgerTransaction'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/documents:
+    get:
+      summary: List Associated Documents
+      tags:
+        - Document
+      operationId: listAssociatedDocuments
+      description: >-
+        Retrieve a list of supplementary documents associated with various
+        platform entities.
+      parameters:
+        - name: documentable_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: The ID of the associated entity (FileContent, AnalysisJob).
+        - name: documentable_type
+          in: query
+          schema:
+            type: string
+            enum:
+              - file_content
+              - analysis_job
+              - semantic_ledger_account
+          description: The type of the associated entity.
+        - name: document_type
+          in: query
+          schema:
+            type: string
+          description: Filter documents by their custom type.
+        - name: after_cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+          description: Cursor for the next page.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of results per page.
+      responses:
+        '200':
+          description: Successful retrieval of documents.
+          headers:
+            X-After-Cursor:
+              schema:
+                type: string
+                nullable: true
+            X-Per_Page:
+              schema:
+                type: integer
+                nullable: true
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+    post:
+      summary: Upload Associated Document
+      tags:
+        - Document
+      operationId: uploadAssociatedDocument
+      description: >-
+        Upload a supplementary document and associate it with a platform entity.
+        E.g., attaching an audit report to an analysis job.
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          schema:
+            type: string
+          required: false
+          description: Unique key for idempotent requests.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/DocumentUploadRequest'
+      responses:
+        '201':
+          description: Document successfully uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/documents/{id}/download:
+    get:
+      summary: Download Associated Document
+      tags:
+        - Document
+      operationId: downloadAssociatedDocument
+      description: >-
+        Retrieve the content of an uploaded supplementary document via a
+        redirect to a pre-signed URL.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The ID of the document to download.
+      responses:
+        '302':
+          description: Redirects to a temporary signed URL for document download.
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+  /api/events:
+    get:
+      summary: List Platform Events
+      tags:
+        - Events
+      operationId: listPlatformEvents
+      description: >-
+        Retrieve a paginated list of significant events occurring on the
+        platform, providing an audit trail of activity.
+      parameters:
+        - name: after_cursor
+          in: query
+          schema:
+            type: string
+            nullable: true
+          description: Cursor for the next page.
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+            default: 50
+          description: Number of results per page.
+        - name: event_time_start
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: An inclusive lower bound for when the event occurred.
+        - name: event_time_end
+          in: query
+          schema:
+            type: string
+            format: date-time
+          description: An inclusive upper bound for when the event occurred.
+        - name: event_name
+          in: query
+          schema:
+            type: string
+            enum:
+              - file_content.uploaded
+              - file_content.ingestion_failed
+              - analysis_job.queued
+              - analysis_job.processing
+              - analysis_job.completed
+              - analysis_job.failed
+              - semantic_ledger_entry.added
+              - semantic_ledger_concept.created
+          description: Filter by specific event name.
+        - name: entity_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter events by the ID of the primary entity involved.
+        - name: resource_type
+          in: query
+          schema:
+            type: string
+            enum:
+              - file_content
+              - analysis_job
+              - semantic_ledger_entry
+              - semantic_ledger_account
+          description: Filter events by the type of resource primarily affected.
+      responses:
+        '200':
+          description: Successful retrieval of events.
+          headers:
+            X-After-Cursor:
+              schema:
+                type: string
+                nullable: true
+            X-Per_Page:
+              schema:
+                type: integer
+                nullable: true
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PlatformEvent'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+  /api/events/{id}:
+    get:
+      summary: Get Platform Event Details
+      tags:
+        - Events
+      operationId: getPlatformEvent
+      description: Retrieve details for a specific platform event.
+      parameters:
+        - name: id
+          in: path
+          schema:
+            type: string
+            format: uuid
+          required: true
+          description: The unique ID of the event.
+      responses:
+        '200':
+          description: Successful retrieval.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformEvent'
+        '404':
+          $ref: '#/components/responses/ResourceNotFound'
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: https://api.nexusmind.ai
+    description: Production API server
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        API Key authentication (JWT Bearer Token or similar). Provide your API
+        key in the 'Authorization' header as 'Bearer YOUR_API_KEY'.
+  responses:
+    BadRequestError:
+      description: Invalid input parameters provided.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    ResourceNotFound:
+      description: The requested resource was not found.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+    ForbiddenError:
+      description: You do not have permission to perform this action.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorMessage'
+  schemas:
+    FileContent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the file content.
+          example: f8c0062b-92f7-4180-87a4-e9185a5323a6
+        object:
+          type: string
+          enum:
+            - file_content
+          description: Type of object.
+          example: file_content
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the file content was first uploaded.
+          example: '2023-10-27T10:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when the file content record was last updated.
+          example: '2023-10-27T10:30:00Z'
+        name:
+          type: string
+          description: Original name of the uploaded file.
+          example: Q3_Earnings_Report_2023.pdf
+        file_type:
+          type: string
+          description: MIME type of the file.
+          example: application/pdf
+        size_bytes:
+          type: integer
+          description: Size of the file in bytes.
+          example: 1245678
+        external_id:
+          type: string
+          nullable: true
+          description: An optional user-defined ID for external system linking.
+          example: DOC_INV_456789
+        status:
+          type: string
+          enum:
+            - uploaded
+            - ingestion_failed
+            - analysis_pending
+            - analysis_complete
+          description: Current processing status of the file content within NexusMind.
+          example: analysis_complete
+        semantic_ledger_account_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The ID of the associated 'Content Account' in the semantic ledger
+            where all insights for this file are logged.
+          example: ac22e8d6-3e4b-4a5c-9c7f-0b1a2c3d4e5f
+        latest_analysis_job_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The ID of the most recent successful AnalysisJob for this file,
+            corresponding to the latest Insight Transaction.
+          example: job52f03f7e-79de-4b68-b7ae-2e1c9d2f0a5f
+        metadata:
+          type: object
+          description: >-
+            Additional user-defined data for the file, stored as key-value
+            pairs.
+          additionalProperties:
+            type: string
+          example:
+            client_project: Project Alpha
+            department: Finance
+      required:
+        - id
+        - object
+        - created_at
+        - updated_at
+        - name
+        - file_type
+        - size_bytes
+        - status
+    FileContentCreateRequestMultipart:
+      type: object
+      properties:
+        file_bytes:
+          type: string
+          format: binary
+          description: The raw binary content of the file.
+        name:
+          type: string
+          description: The desired name for the file content.
+          example: my_thesis.docx
+        file_type:
+          type: string
+          description: >-
+            The MIME type of the file (e.g., application/msword, image/jpeg,
+            text/plain).
+          example: >-
+            application/vnd.openxmlformats-officedocument.wordprocessingml.document
+        external_id:
+          type: string
+          nullable: true
+          description: An optional user-defined ID to link to an external system.
+          example: THESIS_12345
+        analysis_profile_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The ID of an AnalysisProfile to automatically run on this file after
+            upload. If omitted, no analysis is triggered immediately.
+          example: profilea8f9-4c17-4e3a-b8b2-3d7b4c9e8a1f
+        initial_metadata:
+          type: object
+          description: Initial user-defined metadata to associate with the file content.
+          additionalProperties:
+            type: string
+          example:
+            author: Jane Doe
+            date: '2023-08-15'
+      required:
+        - file_bytes
+        - name
+        - file_type
+    FileContentCreateRequestUrl:
+      type: object
+      properties:
+        file_url:
+          type: string
+          format: uri
+          description: >-
+            A URL to an externally hosted file. NexusMind will attempt to
+            retrieve content from this URL.
+          example: https://storage.example.com/files/document_v2.pdf
+        name:
+          type: string
+          description: The desired name for the file content.
+          example: remote_contract.pdf
+        file_type:
+          type: string
+          description: The MIME type of the file.
+          example: application/pdf
+        external_id:
+          type: string
+          nullable: true
+          description: An optional user-defined ID to link to an external system.
+        analysis_profile_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The ID of an AnalysisProfile to automatically run on this file after
+            ingestion from URL.
+        initial_metadata:
+          type: object
+          description: Initial user-defined metadata to associate with the file content.
+          additionalProperties:
+            type: string
+      required:
+        - file_url
+        - name
+        - file_type
+    AsyncResponse:
+      type: object
+      properties:
+        operation_id:
+          type: string
+          format: uuid
+          description: >-
+            Unique ID for the asynchronous operation being processed. Use this
+            ID to query its status.
+          example: oper78c9d0b-6a5b-4c1e-8f2a-1b0d2e3f4a6b
+        resource_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The ID of the resource created or affected by this operation (e.g.,
+            FileContent ID, AnalysisJob ID).
+          example: f8c0062b-92f7-4180-87a4-e9185a5323a6
+        status:
+          type: string
+          enum:
+            - accepted
+            - queued
+            - processing
+          description: The current high-level status of the asynchronous operation.
+          example: queued
+        message:
+          type: string
+          nullable: true
+          description: >-
+            A descriptive message about the asynchronous operation's current
+            state or next steps.
+          example: File content received and queued for ingestion and analysis.
+      required:
+        - operation_id
+        - status
+    AnalysisProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the analysis profile.
+          example: profilea8f9-4c17-4e3a-b8b2-3d7b4c9e8a1f
+        object:
+          type: string
+          enum:
+            - analysis_profile
+          example: analysis_profile
+        created_at:
+          type: string
+          format: date-time
+          example: '2023-09-01T09:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2023-09-10T11:45:00Z'
+        name:
+          type: string
+          description: >-
+            A human-readable name for this analysis profile (e.g., "Full
+            Document Insight", "Image Content Detection").
+          example: Financial Report Analysis
+        description:
+          type: string
+          nullable: true
+          description: >-
+            Detailed description of the analysis profile's purpose and
+            functionality.
+          example: >-
+            Extracts key financial entities, sentiment, and summarizes content
+            for earnings reports.
+        target_file_types:
+          type: array
+          items:
+            type: string
+          description: >-
+            List of MIME types this profile is designed to analyze (e.g.,
+            application/pdf, image/jpeg).
+          example:
+            - application/pdf
+            - >-
+              application/vnd.openxmlformats-officedocument.wordprocessingml.document
+        analysis_steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisStep'
+          description: Ordered list of AI processing steps to apply.
+        status:
+          type: string
+          enum:
+            - active
+            - archived
+          description: >-
+            Status of the analysis profile. 'active' profiles can be used to
+            initiate analysis jobs.
+          example: active
+        version:
+          type: integer
+          description: Incremental version number of this analysis profile definition.
+          example: 1
+        metadata:
+          type: object
+          description: >-
+            Custom metadata for the analysis profile, useful for internal
+            tracking.
+          additionalProperties:
+            type: string
+          example:
+            category: Document Intelligence
+            team: AI Services
+      required:
+        - id
+        - object
+        - created_at
+        - updated_at
+        - name
+        - target_file_types
+        - analysis_steps
+        - status
+        - version
+    AnalysisStep:
+      type: object
+      properties:
+        step_type:
+          type: string
+          enum:
+            - text_keyword_extraction
+            - text_entity_recognition
+            - text_sentiment_analysis
+            - text_summarization
+            - text_classification
+            - text_vector_embedding
+            - image_object_detection
+            - image_face_recognition
+            - image_scene_description
+            - audio_transcription
+            - audio_speaker_diarization
+            - document_structure_parsing
+            - custom_script
+          description: The specific type of AI analysis to be performed in this step.
+          example: text_entity_recognition
+        model_identifier:
+          type: string
+          nullable: true
+          description: >-
+            Identifier for a specific AI model or engine version used for this
+            step (e.g., 'openai-gpt4', 'spacy-lg-v3.0', 'yolo-v8-small').
+          example: huggingface-distilbert-ner
+        parameters:
+          type: object
+          description: >-
+            Customizable parameters for the analysis step, varies by
+            `step_type`.
+          additionalProperties: true
+          example:
+            labels_to_extract:
+              - PERSON
+              - ORG
+              - DATE
+            min_confidence: 0.8
+        description:
+          type: string
+          nullable: true
+          description: A brief description of this specific analysis step.
+          example: >-
+            Recognize persons, organizations, and dates using a fine-tuned NER
+            model.
+      required:
+        - step_type
+    AnalysisProfileCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: A human-readable name for this new analysis profile.
+          example: Legal Contract Review Lite
+        description:
+          type: string
+          nullable: true
+          description: Detailed description of what this profile is intended to do.
+        target_file_types:
+          type: array
+          items:
+            type: string
+          description: List of MIME types this profile will analyze.
+          example:
+            - application/json
+            - text/plain
+        analysis_steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalysisStep'
+          minItems: 1
+          description: At least one AI processing step to define the analysis.
+        metadata:
+          type: object
+          description: Custom metadata for the analysis profile.
+          additionalProperties:
+            type: string
+      required:
+        - name
+        - target_file_types
+        - analysis_steps
+    AnalysisJob:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the analysis job.
+          example: job52f03f7e-79de-4b68-b7ae-2e1c9d2f0a5f
+        object:
+          type: string
+          enum:
+            - analysis_job
+          example: analysis_job
+        created_at:
+          type: string
+          format: date-time
+          example: '2023-10-27T10:30:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2023-10-27T10:45:30Z'
+        file_content_id:
+          type: string
+          format: uuid
+          description: The ID of the file content being analyzed by this job.
+          example: f8c0062b-92f7-4180-87a4-e9185a5323a6
+        analysis_profile_id:
+          type: string
+          format: uuid
+          description: The ID of the analysis profile used for this job.
+          example: profilea8f9-4c17-4e3a-b8b2-3d7b4c9e8a1f
+        status:
+          type: string
+          enum:
+            - queued
+            - processing
+            - completed
+            - failed
+            - cancelled
+          description: Current status of the analysis job.
+          example: completed
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the job started processing.
+          example: '2023-10-27T10:31:00Z'
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Timestamp when the job completed (success or failure).
+          example: '2023-10-27T10:45:15Z'
+        error_details:
+          type: object
+          nullable: true
+          description: Detailed error information if the job status is 'failed'.
+          properties:
+            code:
+              type: string
+              example: ANALYSIS_ERROR
+            message:
+              type: string
+              example: Sentiment analysis step failed due to model inference timeout.
+            details:
+              type: string
+              nullable: true
+              example: >-
+                Could not connect to external sentiment service after 3
+                attempts.
+        semantic_ledger_transaction_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The ID of the resulting Insight Transaction
+            (SemanticLedgerTransaction) in the ledger upon job completion.
+          example: tran9a012b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+      required:
+        - id
+        - object
+        - created_at
+        - updated_at
+        - file_content_id
+        - analysis_profile_id
+        - status
+    AnalysisJobCreateRequest:
+      type: object
+      properties:
+        file_content_id:
+          type: string
+          format: uuid
+          description: The ID of the file content to be analyzed.
+          example: f8c0062b-92f7-4180-87a4-e9185a5323a6
+        analysis_profile_id:
+          type: string
+          format: uuid
+          description: The ID of the AnalysisProfile to use for this job.
+          example: profilea8f9-4c17-4e3a-b8b2-3d7b4c9e8a1f
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+          description: Custom metadata to associate with this specific analysis job run.
+          example:
+            priority: high
+      required:
+        - file_content_id
+        - analysis_profile_id
+    SemanticLedgerAccount:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this semantic ledger account.
+          example: acc3a6c9d0b-6e7f-4h1i-8j2k-1l0m2n3o4p5q
+        object:
+          type: string
+          enum:
+            - semantic_ledger_account
+          example: semantic_ledger_account
+        created_at:
+          type: string
+          format: date-time
+          example: '2023-10-27T10:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2023-10-27T10:45:15Z'
+        name:
+          type: string
+          description: >-
+            A human-readable name for the semantic ledger account. For
+            'file_content_account' types, this typically mirrors the file name.
+          example: 'Content Account: Q3_Earnings_Report_2023.pdf'
+        description:
+          type: string
+          nullable: true
+          description: Optional description of the account's purpose or content.
+          example: Aggregates all semantic insights from the Q3 earnings report.
+        external_id:
+          type: string
+          description: >-
+            An external unique identifier that links this account to its primary
+            entity. For file accounts, this is the `file_content.id`. For
+            concept accounts, it might be 'CONCEPT::Topic_Name' or
+            'ENTITY::Entity_Name'.
+          example: CONCEPT::Artificial_Intelligence_Ethics
+        type:
+          type: string
+          enum:
+            - file_content_account
+            - semantic_concept_account
+          description: >-
+            Defines whether this account represents a specific file or a broader
+            semantic concept.
+          example: semantic_concept_account
+        related_file_content_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            For 'file_content_account' types, this is the ID of the associated
+            `FileContent` resource.
+          example: f8c0062b-92f7-4180-87a4-e9185a5323a6
+        latest_insight_transaction_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: >-
+            The ID of the most recent Insight Transaction (analysis run) that
+            has posted entries to this account.
+          example: tran9a012b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+        metadata:
+          type: object
+          description: Additional key-value metadata for the semantic ledger account.
+          additionalProperties:
+            type: string
+          example:
+            version_tracking_system: v2
+            content_owner: Research Team
+      required:
+        - id
+        - object
+        - created_at
+        - updated_at
+        - name
+        - external_id
+        - type
+    SemanticLedgerAccountCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: A human-readable name for the new semantic concept account.
+          example: 'Topic: Quantum Computing'
+        description:
+          type: string
+          nullable: true
+          description: Optional description of the semantic concept.
+        external_id:
+          type: string
+          description: >-
+            A unique external identifier for this concept (e.g.,
+            'CONCEPT::Quantum_Computing' or 'ENTITY::Dr_Alice_Smith').
+          example: CONCEPT::Quantum_Computing
+        type:
+          type: string
+          enum:
+            - semantic_concept_account
+          description: >-
+            Must be 'semantic_concept_account' for manually created accounts.
+            'file_content_account' types are auto-created.
+          example: semantic_concept_account
+        metadata:
+          type: object
+          description: Additional key-value metadata for the semantic concept account.
+          additionalProperties:
+            type: string
+      required:
+        - name
+        - external_id
+        - type
+    SemanticLedgerAccountUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: New human-readable name for the account.
+          example: 'Topic: Advanced AI Ethics (Revised)'
+        description:
+          type: string
+          nullable: true
+          description: Updated description of the account.
+        metadata:
+          type: object
+          description: >-
+            Key-value metadata. Passing an empty string or `null` as a value
+            will remove the key.
+          additionalProperties:
+            type: string
+          example:
+            review_status: updated
+            old_tag: null
+    SemanticLedgerEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for this semantic ledger entry.
+          example: entry901f4c-1d2e-3f4g-5h6i-7j8k9l0m1n2o
+        object:
+          type: string
+          enum:
+            - semantic_ledger_entry
+          example: semantic_ledger_entry
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the entry was created/recorded in the ledger.
+          example: '2023-10-27T10:45:15Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: >-
+            Timestamp when the entry was last updated (rare, as entries are
+            mostly immutable).
+          example: '2023-10-27T10:45:15Z'
+        semantic_data:
+          type: object
+          properties:
+            type:
+              type: string
+              enum:
+                - keyword
+                - topic
+                - entity
+                - sentiment_score
+                - summary_extract
+                - vector_embedding_hash
+                - taxonomy_node
+                - text_excerpt
+                - object_detection
+                - face_detection
+                - language
+                - color_palette
+                - audio_transcription
+                - document_structure
+              description: The specific type of semantic data extracted by AI.
+              example: entity
+            value:
+              oneOf:
+                - type: string
+                  example: Dr. Evelyn Reed
+                - type: number
+                  example: -0.75
+                - type: boolean
+                  example: true
+                - type: object
+                  example:
+                    x: 100
+                    'y': 200
+                    width: 50
+                    height: 70
+              description: >-
+                The actual extracted data or result. Can be string, number,
+                boolean, or complex object.
+            confidence:
+              type: number
+              format: float
+              nullable: true
+              description: >-
+                Confidence score (0.0 to 1.0) of the AI model's extraction for
+                this specific insight.
+              example: 0.99
+            source_model_identifier:
+              type: string
+              nullable: true
+              description: >-
+                Identifier of the specific AI model or pipeline component that
+                generated this insight (e.g., 'Google-BERT-NER',
+                'CustomVision-v2').
+              example: GPT-4-Summarization-v3
+            original_file_excerpt:
+              type: string
+              nullable: true
+              description: >-
+                A small, relevant snippet of text or descriptive string from the
+                original file content where this insight was found.
+              example: ...argues Dr. Evelyn Reed that AI systems must...
+            location_in_file:
+              type: object
+              nullable: true
+              properties:
+                page_number:
+                  type: integer
+                  description: Page number if PDF/document.
+                line_range:
+                  type: array
+                  items:
+                    type: integer
+                  description: Start and end line numbers for text.
+                char_offset_start:
+                  type: integer
+                  description: Character offset start in text content.
+                char_offset_end:
+                  type: integer
+                  description: Character offset end in text content.
+                bounding_box:
+                  type: object
+                  properties:
+                    x:
+                      type: number
+                      description: X coordinate (top-left)
+                    'y':
+                      type: number
+                      description: Y coordinate (top-left)
+                    width:
+                      type: number
+                      description: Width of bounding box
+                    height:
+                      type: number
+                      description: Height of bounding box
+                  description: Bounding box for visual elements.
+              description: >-
+                Granular location data within the source `FileContent` where
+                this semantic data was found.
+            classification_system:
+              type: string
+              nullable: true
+              description: >-
+                The classification system used if `type` is 'taxonomy_node'
+                (e.g., 'NAICS', 'CustomIndustryOntology').
+            concept_identifier:
+              type: string
+              nullable: true
+              description: >-
+                If this entry links to an existing SemanticConceptAccount, this
+                provides the external ID of that concept.
+              example: CONCEPT::Ethics_in_AI
+          description: Contains the detailed semantic information extracted.
+          required:
+            - type
+            - value
+        file_content_id:
+          type: string
+          format: uuid
+          description: >-
+            The ID of the original `FileContent` that this semantic entry
+            originated from.
+          example: f8c0062b-92f7-4180-87a4-e9185a5323a6
+        ledger_account_id:
+          type: string
+          format: uuid
+          description: >-
+            The ID of the 'Content Account' (`SemanticLedgerAccount`) this
+            semantic entry belongs to.
+          example: acc22e8d6-3e4b-4a5c-9c7f-0b1a2c3d4e5f
+        semantic_transaction_id:
+          type: string
+          format: uuid
+          description: >-
+            The ID of the 'Insight Transaction' (`SemanticLedgerTransaction`)
+            that generated this semantic entry.
+          example: tran9a012b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+        metadata:
+          type: object
+          description: Custom key-value metadata for this specific semantic entry, if any.
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - object
+        - created_at
+        - updated_at
+        - semantic_data
+        - file_content_id
+        - ledger_account_id
+        - semantic_transaction_id
+    SemanticLedgerTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: >-
+            Unique identifier for this 'Insight Transaction' (analysis run
+            record).
+          example: tran9a012b3c-4d5e-6f7a-8b9c-0d1e2f3a4b5c
+        object:
+          type: string
+          enum:
+            - semantic_ledger_transaction
+          example: semantic_ledger_transaction
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when this transaction record was created in the ledger.
+          example: '2023-10-27T10:45:20Z'
+        updated_at:
+          type: string
+          format: date-time
+          description: Timestamp when this transaction record was last updated.
+          example: '2023-10-27T10:45:20Z'
+        description:
+          type: string
+          description: A summary description of what this analysis run entailed.
+          example: Automated full semantic extraction for Q3 earnings report.
+        status:
+          type: string
+          enum:
+            - posted
+          description: >-
+            Status of the insight transaction. Only 'posted' transactions are
+            made permanent in the ledger.
+          example: posted
+        external_id:
+          type: string
+          description: >-
+            The ID of the corresponding `AnalysisJob` that produced this insight
+            transaction.
+          example: job52f03f7e-79de-4b68-b7ae-2e1c9d2f0a5f
+        file_content_id:
+          type: string
+          format: uuid
+          description: The `FileContent` ID this analysis run pertains to.
+          example: f8c0062b-92f7-4180-87a4-e9185a5323a6
+        analysis_profile_id:
+          type: string
+          format: uuid
+          description: The `AnalysisProfile` ID that guided this analysis run.
+          example: profilea8f9-4c17-4e3a-b8b2-3d7b4c9e8a1f
+        number_of_semantic_entries:
+          type: integer
+          description: >-
+            Total count of semantic entries generated and logged as part of this
+            analysis run.
+          example: 250
+        processing_time_ms:
+          type: integer
+          nullable: true
+          description: >-
+            The duration of the AI processing that resulted in this transaction,
+            in milliseconds.
+          example: 12500
+        metadata:
+          type: object
+          description: >-
+            Additional key-value metadata for the specific analysis run,
+            capturing details not covered by standard fields.
+          additionalProperties:
+            type: string
+          example:
+            ai_cost: 0.05 USD
+            model_feedback: low_complexity_data
+      required:
+        - id
+        - object
+        - created_at
+        - updated_at
+        - description
+        - status
+        - external_id
+        - file_content_id
+        - analysis_profile_id
+        - number_of_semantic_entries
+    Document:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: doc78d9e0f-1a2b-3c4d-5e6f-7a8b9c0d1e2f
+        object:
+          type: string
+          enum:
+            - document
+          example: document
+        created_at:
+          type: string
+          format: date-time
+          example: '2023-10-27T10:48:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2023-10-27T10:48:00Z'
+        document_type:
+          type: string
+          nullable: true
+          description: >-
+            A category given to the document (e.g., 'analysis_report',
+            'compliance_certificate', 'source_material_appendix').
+          example: analysis_report
+        documentable_id:
+          type: string
+          format: uuid
+          description: The unique identifier for the associated platform entity.
+          example: job52f03f7e-79de-4b68-b7ae-2e1c9d2f0a5f
+        documentable_type:
+          type: string
+          enum:
+            - file_content
+            - analysis_job
+            - semantic_ledger_account
+          description: The type of the associated entity.
+          example: analysis_job
+        file_name:
+          type: string
+          description: The original name of the uploaded document file.
+          example: Sentiment_Analysis_Report.pdf
+        content_type:
+          type: string
+          description: The MIME type of the document.
+          example: application/pdf
+        file_size_bytes:
+          type: integer
+          description: The size of the document in bytes.
+          example: 54321
+        metadata:
+          type: object
+          description: Custom key-value metadata for the document.
+          additionalProperties:
+            type: string
+      required:
+        - id
+        - object
+        - created_at
+        - updated_at
+        - documentable_id
+        - documentable_type
+        - file_name
+        - content_type
+        - file_size_bytes
+    DocumentUploadRequest:
+      type: object
+      properties:
+        documentable_id:
+          type: string
+          description: >-
+            The unique identifier for the entity to associate this document with
+            (e.g., FileContent ID, AnalysisJob ID).
+          example: job52f03f7e-79de-4b68-b7ae-2e1c9d2f0a5f
+        documentable_type:
+          type: string
+          enum:
+            - file_content
+            - analysis_job
+            - semantic_ledger_account
+          description: The type of the associated entity.
+          example: analysis_job
+        document_type:
+          type: string
+          nullable: true
+          description: >-
+            A custom category for this document (e.g., 'audit_log',
+            'internal_memo').
+          example: audit_log
+        file:
+          type: string
+          format: binary
+          description: The binary content of the document to upload.
+      required:
+        - file
+        - documentable_id
+        - documentable_type
+    PlatformEvent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: eventc8d9e0f1-2a3b-4c5d-6e7f-8a9b0c1d2e3f
+        object:
+          type: string
+          enum:
+            - event
+          example: event
+        created_at:
+          type: string
+          format: date-time
+          description: Timestamp when the event was logged.
+          example: '2023-10-27T10:30:10Z'
+        event_name:
+          type: string
+          enum:
+            - file_content.uploaded
+            - file_content.ingestion_failed
+            - analysis_job.queued
+            - analysis_job.processing
+            - analysis_job.completed
+            - analysis_job.failed
+            - semantic_ledger_entry.added
+            - semantic_ledger_concept.created
+          description: The specific name of the event, indicating the type of activity.
+          example: analysis_job.completed
+        event_time:
+          type: string
+          format: date-time
+          description: >-
+            The precise timestamp when the action or state change represented by
+            the event actually occurred.
+          example: '2023-10-27T10:45:15Z'
+        entity_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: The ID of the primary entity involved in the event.
+          example: job52f03f7e-79de-4b68-b7ae-2e1c9d2f0a5f
+        resource_type:
+          type: string
+          nullable: true
+          description: >-
+            The type of resource related to the event (e.g., 'file_content',
+            'analysis_job').
+          example: analysis_job
+        data:
+          type: object
+          description: >-
+            Additional, event-specific JSON data providing more context or
+            details.
+          additionalProperties: true
+          example:
+            analysis_duration_ms: 10000
+            semantic_entries_generated: 150
+      required:
+        - id
+        - object
+        - created_at
+        - event_name
+        - event_time
+    ErrorMessage:
+      type: object
+      properties:
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              code:
+                type: string
+                description: A machine-readable error code.
+                enum:
+                  - parameter_invalid
+                  - parameter_missing
+                  - resource_not_found
+                  - unauthorized
+                  - forbidden
+                  - idempotency_key_conflict
+                  - payload_too_large
+                  - unsupported_file_type
+                  - analysis_failed
+                  - invalid_url
+                  - entity_already_exists
+                example: analysis_failed
+              message:
+                type: string
+                description: A human-readable description of the error.
+                example: >-
+                  Analysis job for file f123 failed. Sentiment analysis step
+                  reported an unrecoverable error.
+              parameter:
+                type: string
+                nullable: true
+                description: >-
+                  The specific parameter in the request that caused the error
+                  (if applicable).
+                example: file_url
+          description: A list of detailed error objects.
+      required:
+        - errors
+security:
+  - ApiKeyAuth: []
