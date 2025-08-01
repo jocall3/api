@@ -1,0 +1,129 @@
+---
+name: InsightCard
+---
+export const InsightCard = ({ type, value, confidence, highlightColor }) => {
+  // Define default background colors for different insight types.
+  // These are Tailwind CSS classes for consistent styling.
+  const typeColors = {
+    keyword: 'bg-indigo-600',
+    entity: 'bg-emerald-600',
+    sentiment_score: 'bg-amber-600',
+    topic: 'bg-purple-600',
+    vector_embedding_hash: 'bg-slate-600',
+    object_detection: 'bg-teal-600',
+    summary_extract: 'bg-blue-700', // Example addition
+    default: 'bg-gray-700' // Fallback color for unrecognized types
+  };
+
+  // Determine the final background color based on priority: highlightColor > specific type color > default.
+  const backgroundColor = highlightColor || typeColors[type] || typeColors.default;
+
+  // Helper function to return the appropriate FontAwesome icon class
+  // based on the insight type. This adds visual cues.
+  const getIcon = (insightType) => {
+    switch (insightType) {
+      case 'keyword': return 'fa-solid fa-key';
+      case 'entity': return 'fa-solid fa-user-tag';
+      case 'sentiment_score': return 'fa-solid fa-face-smile-beam';
+      case 'topic': return 'fa-solid fa-lightbulb';
+      case 'vector_embedding_hash': return 'fa-solid fa-code-fork';
+      case 'object_detection': return 'fa-solid fa-eye';
+      case 'summary_extract': return 'fa-solid fa-book-open';
+      default: return 'fa-solid fa-cube';
+    }
+  };
+
+  // Ensure value is always a string for safe manipulation
+  const stringValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
+  const truncatedValue = stringValue.length > 80 ? `${stringValue.slice(0, 80)}...` : stringValue;
+
+  return (
+    // Outer div for flexible centering, using Tailwind CSS utility classes.
+    <div className="flex justify-center p-2">
+      {/* Inner card container: responsive styling, rounded corners, padding, shadows, and dynamic background. */}
+      <div className={`flex flex-col rounded-lg p-4 max-w-sm w-full shadow-lg ${backgroundColor} text-white`}>
+        {/* Header section: Displays an icon and the human-readable type of insight. */}
+        <div className="flex items-center mb-2">
+          {/* FontAwesome icon (ensure FontAwesome is enabled in your Readme.com project settings). */}
+          <i className={`${getIcon(type)} text-xl mr-3`} />
+          {/* Display the insight type, capitalized and with underscores replaced by spaces for readability. */}
+          <p className="text-sm font-semibold uppercase opacity-90">{String(type).replace(/_/g, ' ')}</p>
+        </div>
+        
+        {/* Value display section: Shows the actual extracted semantic value. */}
+        <div className="flex-grow">
+          {/* Displays the truncated value. */}
+          <p className="text-xl font-bold break-words">{truncatedValue}</p>
+        </div>
+
+        {/* Optional Confidence Score display: Renders only if `confidence` prop is a number. */}
+        {typeof confidence === 'number' && (
+          <div className="mt-2 text-right text-sm opacity-80">
+            {/* Formats confidence as a percentage. */}
+            Confidence: {(confidence * 100).toFixed(1)}%
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+{/* Example Usage (to be put directly into your MDX documentation where you want the component to appear) */}
+
+{/* Basic Keyword */}
+<InsightCard
+  type="keyword"
+  value="Artificial Intelligence Ethics"
+  confidence={0.98}
+  highlightColor="bg-blue-700"
+/>
+
+{/* Named Entity */}
+<InsightCard
+  type="entity"
+  value="Dr. Evelyn Reed, Lead AI Ethicist at SynthCorp Global"
+  confidence={0.92}
+/>
+
+{/* Sentiment Score (Value can be a string description) */}
+<InsightCard
+  type="sentiment_score"
+  value="-0.65 (Overall Negative)"
+  confidence={0.85}
+  highlightColor="bg-red-700"
+/>
+
+{/* Topic with no explicit confidence */}
+<InsightCard
+  type="topic"
+  value="Quantum Machine Learning Frameworks and Challenges"
+  highlightColor="bg-purple-800"
+/>
+
+{/* Hashed Value, long string */}
+<InsightCard
+  type="vector_embedding_hash"
+  value="abcd1234efgh5678ijkl9012mnop3456qrst7890uvwx1234yzab5678"
+/>
+
+{/* Object Detection with complex value (JSON.stringify inside) */}
+<InsightCard
+  type="object_detection"
+  value={{ label: 'Table', bbox: { x: 0.1, y: 0.2, width: 0.4, height: 0.3 } }}
+  confidence={0.78}
+/>
+
+{/* Long Summary Text */}
+<InsightCard
+  type="summary_extract"
+  value="The document provides a comprehensive overview of innovative approaches to sustainable urban planning in developing countries, focusing on infrastructure development, community engagement models outlined in a recent UN report, and long-term economic viability strategies."
+  confidence={0.99}
+  highlightColor="bg-cyan-700"
+/>
+
+{/* Unknown Type, uses default styling */}
+<InsightCard
+  type="custom_insight"
+  value="A unique, custom-defined insight not mapped to standard types."
+/>
